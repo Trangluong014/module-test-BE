@@ -83,26 +83,7 @@ router.get("/test", function (req, res, next) {
   } else {
     message = "nocity";
   }
-  // const citySplit = city.split(",");
-  // const city1 = citySplit[0] || "";
-  // const city2 = citySplit[1] || "";
-  // let companiesList = {};
-  // let jobByCity = {};
-  // let companiesByCity = {};
-  // let message = "";
-  // const companiesData = loadData().companies;
-  // const jobsData = loadData().jobs;
-  // const companiesIdByCity1 = jobsData
-  //   .filter((e) => e.city === city1)
-  //   .map((e) => e.companyId);
-  // const companiesIdByCity2 = jobsData
-  //   .filter((e) => e.city === city2)
-  //   .map((e) => e.companyId);
 
-  // companiesList = companiesData.filter(
-  //   (e) =>
-  //     companiesIdByCity1.includes(e.id) && companiesIdByCity2.includes(e.id)
-  // );
   return sendResponse(200, { city }, message, res, next);
 });
 
