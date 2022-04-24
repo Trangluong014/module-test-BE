@@ -3,23 +3,57 @@ const router = express.Router();
 const fs = require("fs");
 const sendResponse = require("../helpers/utilitis");
 const isAuthenticated = require("../middleware/isAuthenticated");
+const validateQuery = require("../middleware/validateQuery");
 
 const loadData = () => {
   //read part of the file
-  let jobData = fs.readFileSync("data2.json", "utf8");
-  return JSON.parse(jobData);
+
+  let jobData = fs.readFileSync("data.json", "utf8");
+  jobData = JSON.parse(jobData);
+  jobData.ratings.forEach(
+    (rating, index) =>
+      (jobData.ratings[index] = {
+        ...rating,
+        averageRatings:
+          (rating.workLifeBalanceRatings +
+            rating.payAndBenefits +
+            rating.jobsSecurityAndAdvancement +
+            rating.management +
+            rating.culture) /
+          5,
+      })
+  );
+  let map = {};
+  jobData.ratings.forEach(
+    (rating) =>
+      (map[rating.id] = { id: rating.id, average: rating.averageRatings })
+  );
+
+  jobData.companies.forEach((company) =>
+    company.ratings.forEach(
+      (rating, index) => (company.ratings[index] = map[rating].average)
+    )
+  );
+  jobData.companies.forEach((company) => {
+    let sum = 0;
+    company.ratings.forEach((rating) => (sum = sum + parseInt(rating)));
+    company.averageRating = sum / company.numOfRatings;
+  });
+  return jobData;
 };
 
 /* GET companies. */
-router.get("/companies", function (req, res, next) {
+router.get("/companies", validateQuery, function (req, res, next) {
   const page = req.query.page || 1;
   const limit = req.query.limit || 20;
   const city = req.query.city;
+  const sortBy = req.query.sortBy;
+  console.log("sort", sortBy);
 
   let companiesList = [];
   let message = "";
   const companiesData = loadData().companies;
-  console.log("city", city);
+  // console.log("city", city);
   try {
     if (!city) {
       companiesList = companiesData;
@@ -42,6 +76,17 @@ router.get("/companies", function (req, res, next) {
         (company) => companiesIdbyCity.indexOf(company.id) > -1
       );
       message = "city";
+    }
+    if (sortBy) {
+      console.log(sortBy);
+      let order = req.query.order;
+      if (order === "asc") {
+        companiesList.sort((a, b) => a.averageRating - b.averageRating);
+        message = "sort asc";
+      } else if (order === "desc") {
+        companiesList.sort((a, b) => b.averageRating - a.averageRating);
+        message = "sort desc";
+      }
     }
 
     let startIndex;
@@ -87,108 +132,123 @@ router.get("/test", function (req, res, next) {
   return sendResponse(200, { city }, message, res, next);
 });
 
-router.post("/companies", isAuthenticated, function (req, res, next) {
-  let message = "";
-  let index;
+router.post(
+  "/companies",
+  validateQuery,
+  isAuthenticated,
+  function (req, res, next) {
+    let message = "";
+    let index;
 
-  try {
-    const {
-      id,
-      name,
-      benefits,
-      description,
-      ratings,
-      job,
-      numOfJobs,
-      numOfRatings,
-    } = req.body;
-    if (
-      !id ||
-      !name ||
-      !benefits ||
-      !description ||
-      !ratings ||
-      !job ||
-      !numOfJobs ||
-      !numOfRatings
-    ) {
-      const error = new Error("Missing infor");
-      error.statusCode = 400;
-      throw error;
-    }
-    {
-      const data = loadData();
-      index = data.companies.map((e) => e.id).indexOf(id);
-      if (index !== -1) {
-        const error = new Error("Company is already existed");
+    try {
+      const {
+        id,
+        name,
+        benefits,
+        description,
+        ratings,
+        job,
+        numOfJobs,
+        numOfRatings,
+      } = req.body;
+      if (
+        !id ||
+        !name ||
+        !benefits ||
+        !description ||
+        !ratings ||
+        !job ||
+        !numOfJobs ||
+        !numOfRatings
+      ) {
+        const error = new Error("Missing infor");
         error.statusCode = 400;
         throw error;
-      } else {
-        message = ` add company ${name}`;
-        const companyObj = {
-          id,
-          name,
-          benefits,
-          description,
-          ratings,
-          job,
-          numOfJobs: parseInt(numOfJobs),
-          numOfRatings: parseInt(numOfRatings),
-        };
-        data.companies.push(companyObj);
-        addCompaniesData = JSON.stringify(data);
-        fs.writeFile("./data2.json", addCompaniesData, (err) => {});
+      }
+      {
+        const data = loadData();
+        index = data.companies.map((e) => e.id).indexOf(id);
+        if (index !== -1) {
+          const error = new Error("Company is already existed");
+          error.statusCode = 400;
+          throw error;
+        } else {
+          message = ` add company ${name}`;
+          const companyObj = {
+            id,
+            name,
+            benefits,
+            description,
+            ratings,
+            job,
+            numOfJobs: parseInt(numOfJobs),
+            numOfRatings: parseInt(numOfRatings),
+          };
+          data.companies.push(companyObj);
+          addCompaniesData = JSON.stringify(data);
+          fs.writeFile("./data2.json", addCompaniesData, (err) => {});
+          return sendResponse(200, {}, message, res, next);
+        }
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  "/companies/:id",
+  isAuthenticated,
+  validateQuery,
+  function (req, res, next) {
+    try {
+      const { id } = req.params;
+      let data = loadData();
+      index = data.companies.map((e) => e.id).indexOf(id);
+      if (index === -1) {
+        const error = new Error("Company not found");
+        error.statusCode = 400;
+        throw error;
+      }
+      {
+        message = `${index} add enterprise`;
+        data.companies[index] = { ...data.companies[index], enterprise: true };
+        let addData = JSON.stringify(data);
+        fs.writeFile("./data2.json", addData, (err) => {});
         return sendResponse(200, {}, message, res, next);
       }
+    } catch (error) {
+      next(error);
     }
-  } catch (error) {
-    next(error);
   }
-});
+);
 
-router.put("/companies/:id", isAuthenticated, function (req, res, next) {
-  try {
-    const { id } = req.params;
-    let data = loadData();
-    index = data.companies.map((e) => e.id).indexOf(id);
-    if (index === -1) {
-      const error = new Error("Company not found");
-      error.statusCode = 400;
-      throw error;
+router.delete(
+  "/companies/:id",
+  isAuthenticated,
+  validateQuery,
+  function (req, res, next) {
+    try {
+      const data = loadData();
+
+      const { id } = req.params;
+      index = data.companies.map((e) => e.id).indexOf(id);
+      if (index === -1) {
+        const error = new Error("Company not found");
+        error.statusCode = 400;
+        throw error;
+      }
+      {
+        message = `${index} delete`;
+        data.companies.splice(index, 1);
+        const addData = JSON.stringify(data);
+        fs.writeFile("./data2.json", addData, (err) => {});
+        return sendResponse(200, {}, message, res, next);
+      }
+    } catch (error) {
+      next(error);
     }
-    {
-      message = `${index} add enterprise`;
-      data.companies[index] = { ...data.companies[index], enterprise: true };
-      let addData = JSON.stringify(data);
-      fs.writeFile("./data2.json", addData, (err) => {});
-      return sendResponse(200, {}, message, res, next);
-    }
-  } catch (error) {
-    next(error);
   }
-});
-
-router.delete("/companies/:id", isAuthenticated, function (req, res, next) {
-  try {
-    const data = loadData();
-
-    const { id } = req.params;
-    index = data.companies.map((e) => e.id).indexOf(id);
-    if (index === -1) {
-      const error = new Error("Company not found");
-      error.statusCode = 400;
-      throw error;
-    }
-    {
-      message = `${index} delete`;
-      data.companies.splice(index, 1);
-      const addData = JSON.stringify(data);
-      fs.writeFile("./data2.json", addData, (err) => {});
-      return sendResponse(200, {}, message, res, next);
-    }
-  } catch (error) {
-    next(error);
-  }
-});
+);
 
 module.exports = router;

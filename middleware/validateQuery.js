@@ -1,6 +1,6 @@
 const validateQuery = (req, res, next) => {
   try {
-    allowQuery = ["category", "city", "title", "q", "page"];
+    allowQuery = ["page", "city", "company", "rating", "sort", "order"];
     query = Object.keys(req.query);
     query.forEach((item) => {
       if (allowQuery.indexOf(item) === -1) {
