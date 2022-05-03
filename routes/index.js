@@ -8,7 +8,7 @@ const validateQuery = require("../middleware/validateQuery");
 const loadData = () => {
   //read part of the file
 
-  let jobData = fs.readFileSync("data.json", "utf8");
+  let jobData = fs.readFileSync("data2.json", "utf8");
   jobData = JSON.parse(jobData);
   jobData.ratings.forEach(
     (rating, index) =>
@@ -37,14 +37,15 @@ const loadData = () => {
   jobData.companies.forEach((company) => {
     let sum = 0;
     company.ratings.forEach((rating) => (sum = sum + parseInt(rating)));
-    company.averageRating = sum / company.numOfRatings;
+    company.averageRating =
+      Math.round((sum / company.numOfRatings) * 10000) / 10000;
   });
   return jobData;
 };
 
 /* GET companies. */
 router.get("/companies", validateQuery, function (req, res, next) {
-  const page = req.query.page || 1;
+  const page = req.query.page;
   const limit = req.query.limit || 20;
   const city = req.query.city;
   const sortBy = req.query.sortBy;
@@ -106,13 +107,21 @@ router.get("/companies", validateQuery, function (req, res, next) {
     }
     console.log(companiesList.length);
     companiesListToRender = companiesList.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(companiesList.length / limit);
 
-    return sendResponse(200, companiesListToRender || {}, message, res, next);
+    return sendResponse(
+      200,
+      { companies: companiesListToRender, total_pages: totalPages } || {},
+      message,
+      res,
+      next
+    );
   } catch (error) {
     next(error);
   }
 });
 
+/* test */
 router.get("/test", function (req, res, next) {
   const city = req.query.city;
   console.log(city);
@@ -130,6 +139,25 @@ router.get("/test", function (req, res, next) {
   }
 
   return sendResponse(200, { city }, message, res, next);
+});
+
+/* GET company by ID. */
+
+router.get("/companies/:id", validateQuery, function (req, res, next) {
+  const { id } = req.params;
+
+  let message = `Get company by id ${id}`;
+  let selectedCompany;
+  try {
+    const db = loadData().companies;
+    selectedCompany = db.find((company) => company.id === id);
+    if (!selectedCompany) {
+      message = "Company with given id is not found";
+    }
+  } catch (error) {
+    console.log(error);
+  }
+  return sendResponse(200, selectedCompany || {}, message, res, next);
 });
 
 router.post(
